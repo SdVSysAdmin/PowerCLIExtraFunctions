@@ -42,8 +42,8 @@ Function Get-VsanDiskStats {
       $data = $vsanInternalSystem.QueryPhysicalVsanDisks(@('lsom_objects_count','uuid','isSsd','capacity','capacityUsed','capacityReserved','logicalCapacity','logicalCapacityUsed','logicalCapacityReserved','physDiskCapacity','physDiskCapacityUsed','physDiskCapacityReserved','iops','iopsReserved','disk_health','formatVersion','publicFormatVersion','ssdCapacity','self_only'))
       $totalDiskData += $data
 
-      $esxcli = Get-ESXCLI -VMHost $vmhost
-      $storage = $esxcli.vsan.storage.list()
+      $esxcli = Get-ESXCLI -VMHost $vmhost -V2
+      $storage = $esxcli.vsan.storage.list.Invoke()
       $storage | Add-Member NoteProperty Host $vmhost
       $totalDiskMetadata += $storage
    }
@@ -127,6 +127,11 @@ Function Get-VSANProactiveRebalanceInfo {
    $rebalanceInfo = $view.VSanGetProactiveReBalanceInfo()[0]
    Disconnect-VIServer $vmhosts[0].Name -Confirm:$false
    
+   if ($rebalanceInfo.Running) {
+      $varianceThreshold = [math]::Round($rebalanceInfo.VarianceThreshold * 100,2)
+   } else {
+      $varianceThreshold = 30.00
+   }
    $disks = Get-VSANDiskStats -cluster $cluster
    $disks = $disks | Where-Object {$_.isSSD -ne 1}
    
@@ -145,7 +150,7 @@ Function Get-VSANProactiveRebalanceInfo {
    $minToMaxFullnessDiff = $maxFullness - $minFullness
    $avgVariance = $meanFullness - $minFullness
 
-   $string = "Max usage difference triggering rebalancing: " + [math]::Round($rebalanceInfo.VarianceThreshold * 100,2) + "%"
+   $string = "Max usage difference triggering rebalancing: " + $varianceThreshold + "%"
    Write-Host $string
    Write-Host "Average disk usage: $($meanFullness)%"
    Write-Host "Maximum disk usage: $($maxFullness)% ($($minToMaxFullnessDiff)% above minimum disk usage)"
